@@ -9,6 +9,7 @@ import { StopWatch } from '../../../../base/common/stopwatch.js';
 import { IWebWorkerServerRequestHandler, IWebWorkerServer } from '../../../../base/common/worker/webWorker.js';
 import { LanguageDetectionWorkerHost, ILanguageDetectionWorker } from './languageDetectionWorker.protocol.js';
 import { WorkerTextModelSyncServer } from '../../../../editor/common/services/textModelSync/textModelSync.impl.js';
+import { detectLanguageByRules } from '../common/languageDetectionRules.js';
 
 type RegexpModel = { detect: (inp: string, langBiases: Record<string, number>, supportedLangs?: string[]) => string | undefined };
 
@@ -50,6 +51,12 @@ export class LanguageDetectionWorker implements ILanguageDetectionWorker {
 		const stopWatch = new StopWatch();
 		const documentTextSample = this.getTextForDetection(uri);
 		if (!documentTextSample) { return; }
+
+		// 自作の補助判定。明確な構文を先に確認し、非公開ライブラリがなくても動作させる。
+		const ruleLanguage = detectLanguageByRules(documentTextSample, supportedLangs);
+		if (ruleLanguage && await this._host.$getLanguageId(ruleLanguage)) {
+			return ruleLanguage;
+		}
 
 		// 学習済みモデルの候補を VS Code の言語 ID に変換する（例：py → python）。
 		// モデルの実行本体は、下の detectLanguagesImpl() → runModel()。
