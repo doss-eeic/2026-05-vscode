@@ -1768,6 +1768,78 @@ export class MultiEditorTabsControl extends EditorTabsControl {
 		// Label
 		this.redrawTabLabel(editor, tabIndex, tabContainer, tabLabelWidget, tabLabel);
 
+		// エディタ（タブ）からファイルリソースの URI を取得
+		const resource = EditorResourceAccessor.getOriginalUri(editor, { supportSideBySide: SideBySideEditor.PRIMARY });
+		if (resource) {
+			// パスから拡張子を取り出し、小文字に統一
+			const ext = extname(resource).toLowerCase();
+
+			// 拡張子ごとのカラーマップ（お好みの色にカラーコードを書き換えてください）
+			const colorMap: { [key: string]: string } = {
+				'.ts': '#2f5597',   // TypeScript: 濃い青
+				'.tsx': '#2f5597',  // TSX: 濃い青
+				'.js': '#eec220',   // JavaScript: 黄色
+				'.jsx': '#eec220',  // JSX: 黄色
+				'.html': '#e05120',  // HTML: 赤オレンジ
+				'.css': '#20a0e0',   // CSS: 水色
+				'.scss': '#c6538c',  // SASS/SCSS: ピンク
+				'.md': '#606060',    // Markdown: グレー
+				'.json': '#4caf50',  // JSON: 黄緑
+				'.py': '#3776ab',    // Python: 青
+				'.c': '#a8b9cc',      // C: 薄い青
+				'.cpp': '#f34b7d',    // C++: ピンク
+				'.java': '#b07219',   // Java: 茶色
+				'.rb': '#701516',     // Ruby: 赤
+				'.go': '#00add8',     // Go: 水色
+				'.php': '#4f5d95',    // PHP: 青紫
+				'.rs': '#dea584',     // Rust: オレンジ
+				'.swift': '#ffac45',  // Swift: オレンジ
+				'.kt': '#a97bff',     // Kotlin: 紫
+				'.sh': '#89e051',     // Shell Script: 緑
+				'.bat': '#c1c1c1',    // Batch: グレー
+				'.ps1': '#012456',    // PowerShell: 濃い青
+				'.yml': '#cb171e',    // YAML: 赤
+				'.yaml': '#cb171e',   // YAML: 赤
+				'.xml': '#0060ac',    // XML: 青
+				'.sql': '#e38c00',    // SQL: オレンジ
+				'.dart': '#00b4ab',   // Dart: 水色
+				'.lua': '#000080',    // Lua: 濃い青
+				'.r': '#1c9f1c',      // R: 緑
+				'.pl': '#39457e',     // Perl: 青紫
+				'.hs': '#5e5086',     // Haskell: 紫
+				'.erl': '#b83998',    // Erlang: ピンク
+				'.ex': '#6e4a7e',     // Elixir: 紫
+				'.fs': '#b845fc',     // F#: 紫
+				'.jl': '#a270ba',     // Julia: 紫
+				'.v': '#1e90ff',      // Verilog: 青
+				'.sv': '#ff4500',     // SystemVerilog: 赤オレンジ
+				'.vhdl': '#5e5e5e',   // VHDL: グレー
+				'.asm': '#6e4a7e',    // Assembly: 紫
+				'.s': '#6e4a7e',      // Assembly: 紫
+				'.cmd': '#c1c1c1',    // Command Script: グレー
+				'.psm1': '#012456',   // PowerShell Module: 濃い青
+				'.psd1': '#012456',    // PowerShell Data File: 濃い青
+				'.ps1xml': '#012456',  // PowerShell XML: 濃い青
+				'.pssc': '#012456',    // PowerShell Script Configuration: 濃い青
+				'.psc1': '#012456',    // PowerShell Console File: 濃い青
+			};
+
+			if (colorMap[ext]) {
+				// 該当する拡張子があれば、下部に 3px のカラー線を引く
+				tabContainer.style.borderBottom = `3px solid ${colorMap[ext]}`;
+
+				// もし「背景色そのもの」をごっそり変えたい場合は、上の行をコメントアウトして以下を有効にしてください
+				// tabContainer.style.backgroundColor = colorMap[ext];
+				// tabContainer.style.color = '#ffffff'; // 文字を白にする
+			} else {
+				// 登録外の拡張子はスタイルをリセットし、現在の配色テーマに従う
+				tabContainer.style.borderBottom = '';
+			}
+		} else {
+			// リソースがない特殊なタブ（設定画面など）もリセット
+			tabContainer.style.borderBottom = '';
+		}
+
 		// Action
 		this.redrawTabAction(editor, tabIndex, tabContainer, tabActionBar);
 
