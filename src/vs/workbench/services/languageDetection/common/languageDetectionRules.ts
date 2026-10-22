@@ -16,12 +16,36 @@ export function detectLanguageByRules(content: string, supportedLangs?: readonly
 	const pythonDictionary = /^\s*\w+\s*=\s*\{/m.test(pythonCode)
 		&& /\b(?:True|False|None)\b/.test(pythonCode)
 		&& /^\s*print\s*\(/m.test(pythonCode);
-	if (shebang || pythonDefinition || pythonDictionary) {
+	// 文書先頭の専用マーカーで判定する。コメント内のマーカーは使わない。
+	const markup = content.replace(/<!--[\s\S]*?-->/g, '');
+	const phpOpening = /^\s*<\?php\b/.test(markup);
+	const htmlDocument = /^\s*(?:<!doctype\s+html\s*>|<html\b[^>]*>)/i.test(markup);
+	if (phpOpening) {
+		language = 'php';
+	} else if (htmlDocument) {
+		language = 'html';
+	} else if (shebang || pythonDefinition || pythonDictionary) {
 		language = 'python';
 	} else {
-		// C 系はコメント・文字列を除外し、ヘッダーと関数定義の組み合わせで判定する。
-		const code = content.replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*|'(?:\\.|[^'\\\r\n])*'|"(?:\\.|[^"\\\r\n])*"/g, '');
-		if (/^\s*#\s*include\s*<[^>]+>/m.test(code) && /\b(?:int|void)\s+\w+\s*\([^;{}]*\)\s*\{/.test(code)) {
+		// コメント・文字列中のコード例を除外し、言語固有の構文を組み合わせる。
+		const code = content.replace(/\/\*[\s\S]*?\*\/|\/\/[^\r\n]*|`(?:\\.|[^`\\])*`|'(?:\\.|[^'\\\r\n])*'|"(?:\\.|[^"\\\r\n])*"/g, '');
+		const rustMain = /\bfn\s+main\s*\(\s*\)\s*\{/.test(code) && /\bprintln\s*!\s*\(/.test(code);
+		const goMain = /^\s*package\s+main\s*$/m.test(code) && /\bfunc\s+main\s*\(\s*\)\s*\{/.test(code);
+		const javaMain = /\bclass\s+\w+[^{}]*\{/.test(code)
+			&& /\bpublic\s+static\s+void\s+main\s*\(\s*String\s*(?:\[\s*\]|\.\.\.)\s+\w+\s*\)/.test(code);
+		// JavaScript と共有する構文だけでは TypeScript と判定しない。
+		const typescriptInterface = /^\s*(?:export\s+)?interface\s+\w+\s*\{[^{}]*\b\w+\??\s*:/m.test(code);
+		const typescriptAlias = /^\s*(?:export\s+)?type\s+\w+\s*=\s*(?:string|number|boolean|unknown|never)\s*;/m.test(code);
+		const typescriptVariable = /\b(?:const|let)\s+\w+\s*:\s*(?:string|number|boolean)\b\s*=/.test(code);
+		if (rustMain) {
+			language = 'rust';
+		} else if (goMain) {
+			language = 'go';
+		} else if (javaMain) {
+			language = 'java';
+		} else if (typescriptInterface || typescriptAlias || typescriptVariable) {
+			language = 'typescript';
+		} else if (/^\s*#\s*include\s*<[^>]+>/m.test(code) && /\b(?:int|void)\s+\w+\s*\([^;{}]*\)\s*\{/.test(code)) {
 			if (/^\s*#\s*include\s*<(?:iostream|vector|string|map|memory)>/m.test(code) || /\bstd\s*::/.test(code)) {
 				language = 'cpp';
 			} else if (/^\s*#\s*include\s*<(?:stdio|stdlib|string|stdint|stdbool)\.h>/m.test(code)) {

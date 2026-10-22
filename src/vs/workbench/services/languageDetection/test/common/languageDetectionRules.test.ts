@@ -42,4 +42,40 @@ suite('Language detection rules', () => {
 			detectLanguageByRules('def greet():\n    pass', ['python'])
 		], [undefined, 'python']);
 	});
+
+	test('recognizes HTML, PHP, Rust, Go and Java', () => {
+		assert.deepStrictEqual([
+			detectLanguageByRules('<!DOCTYPE html>\n<html><body>Hello</body></html>'),
+			detectLanguageByRules('<!-- document -->\n<html lang="ja"></html>'),
+			detectLanguageByRules('<?php\necho "Hello";'),
+			detectLanguageByRules('fn main() { println!("Hello"); }'),
+			detectLanguageByRules('package main\nimport "fmt"\nfunc main() { fmt.Println("Hello") }'),
+			detectLanguageByRules('public class Main { public static void main(String[] args) { System.out.println("Hello"); } }')
+		], ['html', 'html', 'php', 'rust', 'go', 'java']);
+	});
+
+	test('recognizes explicit TypeScript syntax', () => {
+		assert.deepStrictEqual([
+			detectLanguageByRules('export interface User { name: string; }'),
+			detectLanguageByRules('type Identifier = number;'),
+			detectLanguageByRules('const count: number = 1;')
+		], ['typescript', 'typescript', 'typescript']);
+	});
+
+	test('ignores quoted examples, comments and incomplete language hints', () => {
+		assert.deepStrictEqual([
+			detectLanguageByRules('const example = "<?php";'),
+			detectLanguageByRules('<!-- <!DOCTYPE html> -->'),
+			detectLanguageByRules('// fn main() { println!("Hello"); }'),
+			detectLanguageByRules('const example = `\npackage main\nfunc main() {}\n`;'),
+			detectLanguageByRules('/* public class Main { public static void main(String[] args) {} } */'),
+			detectLanguageByRules('// interface User { name: string; }'),
+			detectLanguageByRules('interface User { String getName(); }'),
+			detectLanguageByRules('const count = 1; console.log(count);'),
+			detectLanguageByRules('fn main() {}'),
+			detectLanguageByRules('package main'),
+			detectLanguageByRules('<?php echo 1;', ['html']),
+			detectLanguageByRules('const count: number = 1;', ['javascript'])
+		], Array(12).fill(undefined));
+	});
 });
