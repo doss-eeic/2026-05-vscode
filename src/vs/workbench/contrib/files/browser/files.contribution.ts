@@ -685,3 +685,13 @@ ModesRegistry.registerLanguage({
 	aliases: ['Binary'],
 	mimetypes: ['text/x-code-binary']
 });
+
+// files.contribution.ts の最下部に追記
+import { InitializeAutoTabSorter } from './tabSortingActions.js';
+
+// VS Code の起動時に、このクラスを自動でバックグラウンド起動（初期化）させる
+registerWorkbenchContribution2(
+	'workbench.contrib.autoTabSorter',
+	InitializeAutoTabSorter,
+	WorkbenchPhase.BlockRestore // タブが復元される直前のフェーズで起動
+);
