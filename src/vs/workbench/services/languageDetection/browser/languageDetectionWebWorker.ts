@@ -52,12 +52,6 @@ export class LanguageDetectionWorker implements ILanguageDetectionWorker {
 		const documentTextSample = this.getTextForDetection(uri);
 		if (!documentTextSample) { return; }
 
-		// 自作の補助判定。明確な構文を先に確認し、非公開ライブラリがなくても動作させる。
-		const ruleLanguage = detectLanguageByRules(documentTextSample, supportedLangs);
-		if (ruleLanguage && await this._host.$getLanguageId(ruleLanguage)) {
-			return ruleLanguage;
-		}
-
 		// 学習済みモデルの候補を VS Code の言語 ID に変換する（例：py → python）。
 		// モデルの実行本体は、下の detectLanguagesImpl() → runModel()。
 		const neuralResolver = async () => {
@@ -93,6 +87,12 @@ export class LanguageDetectionWorker implements ILanguageDetectionWorker {
 			if (neural) { return neural; }
 			const history = await historicalResolver();
 			if (history) { return history; }
+		}
+
+		// 既存の判定で結果が得られなかった場合だけ、自作の補助判定を使う。
+		const ruleLanguage = detectLanguageByRules(documentTextSample, supportedLangs);
+		if (ruleLanguage && await this._host.$getLanguageId(ruleLanguage)) {
+			return ruleLanguage;
 		}
 
 		return undefined;
