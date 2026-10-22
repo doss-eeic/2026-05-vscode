@@ -26,15 +26,29 @@ let contextKeyName: IContextKey<boolean> | undefined = undefined;
 let isSortingAutomatically = false;
 
 // ==========================================
-// 🧠 共通ソートコアロジック
+// 🧠 共通ソートコアロジック (カウント基準分離版)
 // ==========================================
 function enforceAutoSort(group: IEditorGroup): void {
 	if ((!globalAutoSortEnabled && !globalAutoSortByNameEnabled) || isSortingAutomatically) { return; }
 
+	// 最新の並び順で全エディタ（タブ）を取得
 	const editors = group.getEditors(EditorsOrder.SEQUENTIAL);
 	if (editors.length <= 1) { return; }
 
-	const sortedEditors = [...editors].sort((a, b) => {
+	// ✨ 修正の核心：インデックスやオブジェクトでの判定をすべて廃止！
+	// VS Code 本体が管理している「ピン留め（固定）されたエディタの総数」を直接取得します。
+	// バージョンによるプロパティ名の違いを吸収するため、stickyCount を最優先で取得します。
+	const pinnedCount = (group as any).stickyCount ?? (group as any).pinnedCount ?? 0;
+
+	// 境界線（ピン留め数）に基づいて配列を綺麗に2つに切り分ける
+	const pinnedEditors = editors.slice(0, pinnedCount);     // 左側のピン留めエリア（一切動かさない）
+	const unpinnedEditors = editors.slice(pinnedCount);       // 右側の一般フリーエリア（ソート対象）
+
+	// ソート対象のタブが1つ以下なら並び替える必要がないので終了
+	if (unpinnedEditors.length <= 1) { return; }
+
+	// ピン留めされていない一般タブのエリアだけをソート
+	unpinnedEditors.sort((a, b) => {
 		const uriA = EditorResourceAccessor.getOriginalUri(a);
 		const uriB = EditorResourceAccessor.getOriginalUri(b);
 
@@ -61,6 +75,10 @@ function enforceAutoSort(group: IEditorGroup): void {
 		}
 	});
 
+	// 左側の安全なピン留めエリア ＋ ソートされた一般エリア をマージ
+	const sortedEditors = [...pinnedEditors, ...unpinnedEditors];
+
+	// 実際のタブ位置に反映
 	isSortingAutomatically = true;
 	try {
 		for (let i = 0; i < sortedEditors.length; i++) {
@@ -76,7 +94,7 @@ function enforceAutoSort(group: IEditorGroup): void {
 }
 
 // ==========================================
-// 🚀 起動時フック設定
+// 🚀 起動時フック設定 (遅延処理)
 // ==========================================
 export class InitializeAutoTabSorter {
 	constructor(
@@ -89,14 +107,31 @@ export class InitializeAutoTabSorter {
 		contextKeyExtension.set(globalAutoSortEnabled);
 		contextKeyName.set(globalAutoSortByNameEnabled);
 
+		// 共通のリスナー処理を定義
+		const setupListener = (group: IEditorGroup) => {
+			group.onDidModelChange((e: any) => {
+				// ピン留め状態の変更イベントそのものは即座にスキップ
+				if (e && (e.kind === 4 || e.kind === 5 || e.stickyChanged || e.pinnedChanged)) {
+					return;
+				}
+
+				// 本家のタブ移動が完了するまで10ms待ってからソートを安全に実行
+				setTimeout(() => {
+					if (group && typeof group.getEditors === 'function') {
+						enforceAutoSort(group);
+					}
+				}, 10);
+			});
+		};
+
 		this.editorGroupService.whenReady.then(() => {
 			for (const group of this.editorGroupService.groups) {
-				group.onDidModelChange(() => enforceAutoSort(group));
+				setupListener(group);
 			}
 		});
 
 		this.editorGroupService.onDidAddGroup(group => {
-			group.onDidModelChange(() => enforceAutoSort(group));
+			setupListener(group);
 		});
 	}
 }
@@ -119,7 +154,7 @@ export class ToggleAutoTabSortAction extends Action2 {
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		globalAutoSortEnabled = !globalAutoSortEnabled;
 		if (globalAutoSortEnabled) {
-			globalAutoSortByNameEnabled = false; // 名前順自動をOFF（排他制御）
+			globalAutoSortByNameEnabled = false;
 		}
 
 		contextKeyExtension?.set(globalAutoSortEnabled);
@@ -178,7 +213,7 @@ export class ToggleAutoTabSortByNameAction extends Action2 {
 	override async run(accessor: ServicesAccessor): Promise<void> {
 		globalAutoSortByNameEnabled = !globalAutoSortByNameEnabled;
 		if (globalAutoSortByNameEnabled) {
-			globalAutoSortEnabled = false; // 拡張子順自動をOFF（排他制御）
+			globalAutoSortEnabled = false;
 		}
 
 		contextKeyExtension?.set(globalAutoSortEnabled);
@@ -219,7 +254,7 @@ export class SortEditorsByNameAction extends Action2 {
 	}
 }
 
-// すべてのアクションをシステムに一斉登録
+// すべてのアクションを登録
 registerAction2(ToggleAutoTabSortAction);
 registerAction2(SortEditorsByExtensionAction);
 registerAction2(ToggleAutoTabSortByNameAction);
