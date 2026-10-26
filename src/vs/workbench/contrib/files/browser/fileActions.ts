@@ -1136,10 +1136,6 @@ export const pasteFileHandler = async (accessor: ServicesAccessor, fileList?: Fi
 	const dialogService = accessor.get(IDialogService);
 	const hostService = accessor.get(IHostService);
 
-	const filesConfigService = accessor.get(IFilesConfigurationService);
-	const remoteAgentService = accessor.get(IRemoteAgentService);
-	const pathService = accessor.get(IPathService);
-
 	// 1. エクスプローラーで選択されている項目を取得する。
 	const context = explorerService.getContext(false);
 	const hasNativeFilesToPaste = fileList && fileList.length > 0;
@@ -1223,67 +1219,21 @@ export const pasteFileHandler = async (accessor: ServicesAccessor, fileList?: Fi
 				modelDisposables.dispose();
 			}
 
-			// ✨ 2. 元のコードのロジックを使い、既存ファイルと被らないデフォルトの名前（連番付き）を事前に決定する
-			let defaultName = `clipboard${extension}`;
-			let targetPathCandidate = resources.joinPath(element.resource, defaultName);
-			while (await fileService.exists(targetPathCandidate)) {
-				defaultName = incrementFileName(defaultName, false, 'smart');
-				targetPathCandidate = resources.joinPath(element.resource, defaultName);
+			// 同名ファイルは上書きせず、連番を付けてすぐに保存する。
+			let name = `clipboard${extension}`;
+			let target = resources.joinPath(element.resource, name);
+			while (await fileService.exists(target)) {
+				name = incrementFileName(name, false, 'smart');
+				target = resources.joinPath(element.resource, name);
 			}
+			await applyCopyResourceEdit([target], [new ResourceFileEdit(undefined, target, {
+				contents: Promise.resolve(VSBuffer.fromString(text)),
+				overwrite: false
+			})]);
 
-			// ✨ 3. 決定したデフォルト名を NewExplorerItem にセットしてエクスプローラー上に出現させる
-			const newStat = new NewExplorerItem(fileService, configurationService, filesConfigService, element, false);
-
-			// ✨ ランタイム上で、name プロパティが常に defaultName を返すようにゲッターを再定義する
-			Object.defineProperty(newStat, 'name', {
-				get: () => defaultName,
-				configurable: true // 後から再設定・削除できるようにする
-			});
-
-			element.addChild(newStat);
-
-
-			// 4. 名前が確定（Enterキーやフォーカスアウト）した時の実行処理
-			const onSuccess = async (value: string): Promise<void> => {
-				try {
-					const resourceToCreate = resources.joinPath(element.resource, value);
-
-					// 新規ファイル作成と同時にクリップボードのテキストを書き込む
-					await explorerService.applyBulkEdit([new ResourceFileEdit(undefined, resourceToCreate, {
-						folder: false,
-						contents: Promise.resolve(VSBuffer.fromString(text)),
-						overwrite: false
-					})], {
-						undoLabel: nls.localize('createBulkEdit', "Create {0}", value),
-						progressLabel: nls.localize('creatingBulkEdit', "Creating {0}", value),
-						confirmBeforeUndo: true
-					});
-
-					await refreshIfSeparator(value, explorerService);
-
-					// 作成したファイルをエクスプローラーで選択し、エディタで開く
-					await explorerService.select(resourceToCreate, true);
-					await editorService.openEditor({ resource: resourceToCreate, options: { pinned: true } });
-
-				} catch (error) {
-					onErrorWithRetry(notificationService, error, () => onSuccess(value));
-				}
-			};
-
-			const os = (await remoteAgentService.getEnvironment())?.os ?? OS;
-
-			// 5. エクスプローラーのインライン編集（ファイル名入力）を開始する
-			await explorerService.setEditable(newStat, {
-				validationMessage: value => validateFileName(pathService, newStat, value, os),
-				onFinish: async (value, success) => {
-					element.removeChild(newStat);
-					await explorerService.setEditable(newStat, null);
-
-					if (success) {
-						onSuccess(value);
-					}
-				}
-			});
+			// ファイルを開き、フォーカスはエクスプローラーの選択行に残す。Enter で名前を変更できる。
+			await explorerService.select(target, true);
+			await editorService.openEditor({ resource: target, options: { pinned: true, preserveFocus: true } });
 
 			return;
 		}
