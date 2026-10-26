@@ -9,6 +9,7 @@ import { StopWatch } from '../../../../base/common/stopwatch.js';
 import { IWebWorkerServerRequestHandler, IWebWorkerServer } from '../../../../base/common/worker/webWorker.js';
 import { LanguageDetectionWorkerHost, ILanguageDetectionWorker } from './languageDetectionWorker.protocol.js';
 import { WorkerTextModelSyncServer } from '../../../../editor/common/services/textModelSync/textModelSync.impl.js';
+import { detectLanguageByRules } from '../common/languageDetectionRules.js';
 
 type RegexpModel = { detect: (inp: string, langBiases: Record<string, number>, supportedLangs?: string[]) => string | undefined };
 
@@ -86,6 +87,12 @@ export class LanguageDetectionWorker implements ILanguageDetectionWorker {
 			if (neural) { return neural; }
 			const history = await historicalResolver();
 			if (history) { return history; }
+		}
+
+		// 既存の判定で結果が得られなかった場合だけ、自作の補助判定を使う。
+		const ruleLanguage = detectLanguageByRules(documentTextSample, supportedLangs);
+		if (ruleLanguage && await this._host.$getLanguageId(ruleLanguage)) {
+			return ruleLanguage;
 		}
 
 		return undefined;
